@@ -1,5 +1,33 @@
 const db = require('../config/database');
 const bcrypt = require('bcrypt');
+const { loginAdmin, logoutAdmin } = require('../middleware/auth');
+
+function getLoginForm(req, res) {
+  res.render('pages/login', {
+    error: req.query.error || null,
+    returnTo: req.query.returnTo || null
+  });
+}
+
+function handleLogin(req, res) {
+  const { username, password, returnTo } = req.body || {};
+
+  if (!loginAdmin(req, username, password)) {
+    const query = returnTo
+      ? `?error=${encodeURIComponent('Invalid credentials.')}&returnTo=${encodeURIComponent(returnTo)}`
+      : '?error=Invalid+credentials';
+    return res.redirect('/admin/login' + query);
+  }
+
+  const target = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
+    ? returnTo
+    : '/admin/dashboard';
+  return res.redirect(target);
+}
+
+function handleLogout(req, res) {
+  logoutAdmin(req, () => res.redirect('/admin/login'));
+}
 
 function getDashboard(req, res) {
   try {
@@ -108,5 +136,8 @@ function markRefunded(req, res) {
 module.exports = {
   getDashboard,
   retryProvisioning,
-  markRefunded
+  markRefunded,
+  getLoginForm,
+  handleLogin,
+  handleLogout
 };
