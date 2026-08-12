@@ -1,0 +1,48 @@
+<% if (!failedLogs || failedLogs.length === 0) { %>
+    <p style="color: #666;">No failed provisioning events recorded.</p>
+<% } else { %>
+    <div class="table-responsive">
+                <table>
+        <thead>
+            <tr>
+                <th>Payment Intent ID</th>
+                <th>Error Message</th>
+                <th>Status</th>
+                <th>Attempts</th>
+                <th>Logged At</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% failedLogs.forEach(log => { %>
+                <tr>
+                    <td><code><%= log.payment_intent_id %></code></td>
+                    <td style="color: #dc3545;"><%= log.error_message %></td>
+                    <td>
+                        <%- include('../atoms/badge', { status: log.status }) %>
+                        <!-- ^^^ FIX: Relative path traverse up to views/atoms/badge -->
+                    </td>
+                    <td><%= log.attempts %></td>
+                    <td class="nowrap"><%= new Date(log.created_at).toLocaleString() %></td>
+                    <td>
+                        <% if (log.status === 'FAILED') { %>
+                            <div class="action-group">
+                                <form action="/admin/re-provision/<%= log.id %>" method="POST" style="margin:0;">
+                                    <button type="submit" class="btn-retry">Retry</button>
+                                </form>
+                                <form action="/admin/mark-refunded/<%= log.id %>" method="POST" style="margin:0;">
+                                    <button type="submit" class="btn-refund">Mark Refunded</button>
+                                </form>
+                            </div>
+                        <% } else if (log.status === 'REFUNDED') { %>
+                            <span style="color: #6c757d; font-size: 12px;">Refunded</span>
+                        <% } else { %>
+                            <span style="color: #198754; font-size: 12px;">Resolved</span>
+                        <% } %>
+                    </td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+    </div>
+<% } %>

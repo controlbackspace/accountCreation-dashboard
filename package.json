@@ -1,0 +1,39 @@
+{
+  "name": "account-provisioning-system",
+  "version": "1.0.0",
+  "description": "Event-driven account provisioning system with Choice B failure recovery",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "nodemonConfig": {
+    "watch": [
+      "app.js",
+      "config/",
+      "controllers/",
+      "middleware/",
+      "routes/",
+      "views/"
+    ],
+    "ext": "js,json,ejs,sql",
+    "ignore": [
+      "*.db",
+      "*.db-wal",
+      "*.db-shm",
+      "node_modules/",
+      "public/"
+    ],
+    "delay": "250"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "better-sqlite3": "^11.8.0",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}

@@ -1,0 +1,6 @@
+<% 
+  let badgeClass = 'badge-failed';
+  if (status === 'REPROVISIONED') badgeClass = 'badge-success';
+  if (status === 'REFUNDED') badgeClass = 'badge-refunded';
+%>
+<span class="badge <%= badgeClass %>"><%= status %></span>

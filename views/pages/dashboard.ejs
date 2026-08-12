@@ -1,0 +1,51 @@
+<% if (query && query.success) { %>
+    <div class="alert alert-success"><%= query.success %></div>
+<% } %>
+<% if (query && query.error) { %>
+    <div class="alert alert-error"><%= query.error %></div>
+<% } %>
+
+<div class="stats-grid">
+    <%- include('../molecules/statCard', { title: 'Active Provisioned Users', value: stats.totalUsers, color: '#333' }) %>
+    <%- include('../molecules/statCard', { title: 'Active Failure Queue', value: stats.totalFailures, color: '#dc3545' }) %>
+    <%- include('../molecules/statCard', { title: 'Re-provisioned via Retry', value: stats.reprovisioned, color: '#198754' }) %>
+    <%- include('../molecules/statCard', { title: 'Marked Refunded', value: stats.refunded || 0, color: '#6c757d' }) %>
+</div>
+
+<div class="card">
+    <h2>Active User Accounts</h2>
+    <% if (users.length === 0) { %>
+        <p style="color: #666;">No accounts provisioned yet.</p>
+    <% } else { %>
+        <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Payment Intent ID</th>
+                    <th>Created At</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% users.forEach(user => { %>
+                    <tr>
+                        <td>#<%= user.id %></td>
+                        <td><%= user.name %></td>
+                        <td><%= user.email %></td>
+                        <td><code><%= user.payment_intent_id %></code></td>
+                        <td class="nowrap"><%= new Date(user.created_at).toLocaleString() %></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+        </div>
+    <% } %>
+</div>
+
+<div class="card">
+    <h2>Failed Account Creations</h2>
+    <%- include('../organisms/failedLogsTable', { failedLogs }) %>
+</div>
+
