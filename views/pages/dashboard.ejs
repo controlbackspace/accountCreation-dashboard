@@ -7,7 +7,7 @@
 
 <div class="stats-grid">
     <%- include('../molecules/statCard', { title: 'Active Provisioned Users', value: stats.totalUsers, color: '#333' }) %>
-    <%- include('../molecules/statCard', { title: 'Active Failure Queue', value: stats.totalFailures, color: '#dc3545' }) %>
+    <%- include('../molecules/statCard', { title: 'Active Failure Queue', value: stats.totalFailures, color: '#d81b60' }) %>
     <%- include('../molecules/statCard', { title: 'Re-provisioned via Retry', value: stats.reprovisioned, color: '#198754' }) %>
     <%- include('../molecules/statCard', { title: 'Marked Refunded', value: stats.refunded || 0, color: '#6c757d' }) %>
 </div>

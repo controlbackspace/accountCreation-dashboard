@@ -17,7 +17,7 @@
             <% failedLogs.forEach(log => { %>
                 <tr>
                     <td><code><%= log.payment_intent_id %></code></td>
-                    <td style="color: #dc3545;"><%= log.error_message %></td>
+                    <td style="color: #d81b60;"><%= log.error_message %></td>
                     <td>
                         <%- include('../atoms/badge', { status: log.status }) %>
                         <!-- ^^^ FIX: Relative path traverse up to views/atoms/badge -->
