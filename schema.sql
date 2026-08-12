@@ -20,3 +20,13 @@ CREATE TABLE IF NOT EXISTS failed_creation_logs (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL UNIQUE,
+    event_type TEXT,
+    payment_intent_id TEXT,
+    response_status INTEGER NOT NULL,
+    response_payload TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
