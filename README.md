@@ -28,7 +28,7 @@ ADMIN_PASSWORD=lilo_secure_pass!
 WEBHOOK_RATE_LIMIT_WINDOW_MS=60000
 WEBHOOK_RATE_LIMIT_MAX=60
 ```
-**Run The APp**
+**Run The APP**
 ```
 # Development mode with Nodemon
 npm run dev
@@ -36,5 +36,5 @@ npm run dev
 # Production start
 npm start
 ```
-![System Demo](./assets/demo.gif)
+![System Demo](./assets/Demo.gif)
 
