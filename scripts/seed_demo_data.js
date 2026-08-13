@@ -57,6 +57,18 @@ const bcrypt = require('bcrypt');
   insLog.run('pi_fail_2005', mkPayload('pi_fail_2005', 'vince.ocampo@gmail.com', 'Vince Ocampo'),
     'bcrypt hashing resource exhaustion (server under load)', 'FAILED', 4, '2026-08-13 10:02:00', '2026-08-13 10:04:00');
 
+  // Provider returned HTTP 503 (temporary), payload is valid so Retry succeeds
+  insLog.run('pi_fail_2010', mkPayload('pi_fail_2010', 'isabel.flores@yahoo.com', 'Isabel Flores'),
+    'Payment gateway responded with HTTP 503 Service Unavailable', 'FAILED', 2, '2026-08-13 13:10:00', '2026-08-13 13:11:20');
+
+  // Upstream webhook worker crashed mid-transaction
+  insLog.run('pi_fail_2011', mkPayload('pi_fail_2011', 'andrea.salazar@gmail.com', 'Andrea Salazar'),
+    'Webhook worker crashed mid-transaction, no commit was made', 'FAILED', 1, '2026-08-13 14:25:00', '2026-08-13 14:25:05');
+
+  // Slow third-party integration call timed out
+  insLog.run('pi_fail_2012', mkPayload('pi_fail_2012', 'kyle.manalo@outlook.com', 'Kyle Manalo'),
+    'Timed out calling external ID verification service', 'FAILED', 3, '2026-08-13 15:00:00', '2026-08-13 15:03:30');
+
   // ===== FAILED (unrecoverable) — Retry will keep failing; Mark Refunded is the path =====
   // Chargeback — money contested, admin must resolve
   insLog.run('pi_fail_2002', mkPayload('pi_fail_2002', 'karina.delossantos@gmail.com', 'Karina Delos Santos'),
@@ -78,6 +90,14 @@ const bcrypt = require('bcrypt');
   insLog.run('pi_fail_2009', '{"data": {"id": "pi_fail_2009", "type": "payment.paid", "attributes": {"customer_email": "gabby.tan@gmail.com"',
     'Malformed payload: raw payload could not be parsed', 'FAILED', 1, '2026-08-13 12:00:00', '2026-08-13 12:00:05');
 
+  // Invalid email format — fails validation, Retry keeps failing
+  insLog.run('pi_fail_2013', mkPayload('pi_fail_2013', 'not-an-email', 'Paolo Villanueva'),
+    'Invalid customer email format in payload', 'FAILED', 2, '2026-08-13 16:10:00', '2026-08-13 16:12:00');
+
+  // Payment intent already expired/voided at the gateway while stuck in FAILED
+  insLog.run('pi_fail_2014', mkPayload('pi_fail_2014', 'cristina.abad@gmail.com', 'Cristina Abad'),
+    'Unrecoverable failure: payment intent expired. Admin transition to REFUNDED required.', 'FAILED', 1, '2026-08-13 17:30:00', '2026-08-13 17:30:40');
+
   // ===== REPROVISIONED - recovered via admin Retry =====
   insLog.run('pi_repro_3001', mkPayload('pi_repro_3001', 'ramon.aquino@gmail.com', 'Ramon Aquino'),
     'Simulated lock timeout during initial webhook execution', 'REPROVISIONED', 2, '2026-08-11 13:00:00', '2026-08-11 13:10:00');
@@ -85,12 +105,22 @@ const bcrypt = require('bcrypt');
   insLog.run('pi_repro_3002', mkPayload('pi_repro_3002', 'elena.mendoza@yahoo.com', 'Elena Mendoza'),
     'Payload missing required customer attributes', 'REPROVISIONED', 3, '2026-08-12 07:45:00', '2026-08-12 08:00:00');
 
+  // Was stuck in FAILED, then a gateway retry succeeded on its own
+  insLog.run('pi_repro_3003', mkPayload('pi_repro_3003', 'daryl.castillo@gmail.com', 'Daryl Castillo'),
+    'Gateway retried delivery automatically after transient failure', 'REPROVISIONED', 4, '2026-08-12 16:30:00', '2026-08-12 16:45:00');
+
+  insLog.run('pi_repro_3004', mkPayload('pi_repro_3004', 'camille.roa@outlook.com', 'Camille Roa'),
+    'Database write lock timeout during webhook execution', 'REPROVISIONED', 2, '2026-08-13 06:20:00', '2026-08-13 06:25:00');
+
   // ===== REFUNDED - terminal, money returned =====
   insLog.run('pi_refund_4001', mkPayload('pi_refund_4001', 'paolo.garcia@gmail.com', 'Paolo Garcia'),
     'Payload missing required customer attributes', 'REFUNDED', 3, '2026-08-10 16:20:00', '2026-08-10 17:05:00');
 
   insLog.run('pi_refund_4002', mkPayload('pi_refund_4002', 'sofia.navarro@outlook.com', 'Sofia Navarro'),
     'Payment refunded after repeated provisioning failures', 'REFUNDED', 5, '2026-08-11 15:50:00', '2026-08-11 16:40:00');
+
+  insLog.run('pi_refund_4003', mkPayload('pi_refund_4003', 'julian.mercado@gmail.com', 'Julian Mercado'),
+    'Customer requested cancellation, money returned', 'REFUNDED', 4, '2026-08-13 18:20:00', '2026-08-13 18:50:00');
 
   console.log('users:', db.prepare('SELECT COUNT(*) c FROM users').get().c);
   console.log('failed logs:', db.prepare('SELECT COUNT(*) c FROM failed_creation_logs').get().c);
