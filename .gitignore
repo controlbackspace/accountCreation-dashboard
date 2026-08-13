@@ -12,3 +12,4 @@ node_modules/
 # Process / Log files
 *.log
 npm-debug.log*
+logs/

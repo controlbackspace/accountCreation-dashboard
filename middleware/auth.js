@@ -1,5 +1,9 @@
 const crypto = require('crypto');
 const session = require('express-session');
+const SqliteStoreFactory = require('better-sqlite3-session-store');
+const db = require('../config/database');
+
+const SqliteStore = SqliteStoreFactory(session);
 
 function safeEqual(a, b) {
   const bufA = Buffer.from(String(a == null ? '' : a), 'utf8');
@@ -10,9 +14,14 @@ function safeEqual(a, b) {
 
 function createAdminSession(options = {}) {
   const secret = options.secret || process.env.SESSION_SECRET || 'dev-admin-session-secret';
+  const store = new SqliteStore({
+    client: db,
+    expired: { clear: true, intervalMs: 15 * 60 * 1000 }
+  });
   return session({
     name: options.name || 'lilo.admin.sid',
     secret,
+    store,
     resave: false,
     saveUninitialized: false,
     rolling: true,

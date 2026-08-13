@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 const { createAdminSession, requireAdmin } = require('../middleware/auth');
+const { generateCsrf, verifyCsrf } = require('../middleware/csrf');
 const {
   getDashboard,
   retryProvisioning,
@@ -15,14 +16,14 @@ const {
 router.use(createAdminSession());
 
 // Public Admin Auth Routes
-router.get('/login', getLoginForm);
-router.post('/login', handleLogin);
-router.post('/logout', handleLogout);
+router.get('/login', generateCsrf, getLoginForm);
+router.post('/login', verifyCsrf, handleLogin);
+router.post('/logout', verifyCsrf, handleLogout);
 
 // Protected Admin Routes
 router.use(requireAdmin);
-router.get('/dashboard', getDashboard);
-router.post('/re-provision/:id', retryProvisioning);
-router.post('/mark-refunded/:id', markRefunded);
+router.get('/dashboard', generateCsrf, getDashboard);
+router.post('/re-provision/:id', verifyCsrf, retryProvisioning);
+router.post('/mark-refunded/:id', verifyCsrf, markRefunded);
 
 module.exports = router;

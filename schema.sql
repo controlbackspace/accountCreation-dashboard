@@ -30,3 +30,9 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     response_payload TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS sessions (
+    sid TEXT NOT NULL PRIMARY KEY,
+    sess JSON NOT NULL,
+    expire TEXT NOT NULL
+);
