@@ -6,10 +6,11 @@ Prerequisites
     Node.js v18.x or higher
 
     npm v9.x or higher
-Environment Configuration
+
+#Environment Configuration
 
 Create a .env file in the root directory based on .env.example:
-Code snippet
+```
 
 PORT=3000
 NODE_ENV=development
@@ -26,3 +27,4 @@ ADMIN_PASSWORD=lilo_secure_pass!
 # Webhook Rate Limiting
 WEBHOOK_RATE_LIMIT_WINDOW_MS=60000
 WEBHOOK_RATE_LIMIT_MAX=60
+```
