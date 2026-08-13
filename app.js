@@ -8,12 +8,12 @@ assertEnvironment();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 1. View Engine Setup (EJS)
+// view engine: ejs
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// 2. Raw Body Buffering for HMAC Signature Validation
-// Captures the exact unparsed byte buffer into req.rawBody BEFORE express.json parses it
+// keep the raw body BEFORE express.json parses it — HMAC needs the exact bytes
+// connect this to verifyHmac middleware
 app.use(
   express.json({
     verify: (req, res, buf) => {
@@ -22,26 +22,25 @@ app.use(
   })
 );
 
-// Form payload parser for Admin EJS POST submissions
+// admin forms are urlencoded
 app.use(express.urlencoded({ extended: true }));
 
-// 3. Static Asset Serving
+// static assets
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 4. Route Imports
 const webhookRoutes = require('./routes/webhook');
 const adminRoutes = require('./routes/admin');
 
-// 5. Route Mounting
+// connect the routes here
 app.use('/webhook', webhookRoutes);
 app.use('/admin', adminRoutes);
 
-// Root entry redirect
+// land people on the dashboard
 app.get('/', (req, res) => {
   res.redirect('/admin/dashboard');
 });
 
-// 6. Global Error Handling Middleware
+// catch any error that escapes above
 app.use((err, req, res, next) => {
   console.error('[UNHANDLED ERROR]:', err.stack);
   res.status(err.status || 500).json({
@@ -51,7 +50,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 7. Server Initialization
+// start server only when run directly (not when imported in tests)
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`[SERVER RUNNING]: Listening on http://localhost:${PORT}`);

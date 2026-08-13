@@ -20,7 +20,7 @@
                     <td style="color: #d81b60;"><%= log.error_message %></td>
                     <td>
                         <%- include('../atoms/badge', { status: log.status }) %>
-                        <!-- ^^^ FIX: Relative path traverse up to views/atoms/badge -->
+                        <!-- keep in mind: badge lives at views/atoms/badge -->
                     </td>
                     <td><%= log.attempts %></td>
                     <td class="nowrap"><%= new Date(log.created_at).toLocaleString() %></td>

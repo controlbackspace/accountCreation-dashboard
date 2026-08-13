@@ -15,12 +15,12 @@ const {
 
 router.use(createAdminSession());
 
-// Public Admin Auth Routes
+// open: login/logout, no auth yet
 router.get('/login', generateCsrf, getLoginForm);
 router.post('/login', verifyCsrf, handleLogin);
 router.post('/logout', verifyCsrf, handleLogout);
 
-// Protected Admin Routes
+// below here: everything needs a logged in admin
 router.use(requireAdmin);
 router.get('/dashboard', generateCsrf, getDashboard);
 router.post('/re-provision/:id', verifyCsrf, retryProvisioning);
