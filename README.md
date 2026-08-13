@@ -36,5 +36,5 @@ npm run dev
 # Production start
 npm start
 ```
-![System Demo](./assets/Demo.gif)
+![System Demo](./assets/Demo2.gif)
 
