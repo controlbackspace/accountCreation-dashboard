@@ -36,5 +36,8 @@ npm run dev
 # Production start
 npm start
 ```
-![System Demo](./assets/Kooha-2026-08-13-13-57-38.webm)
+![System Demo](./assets/Demo.gif)
+_Figure 1. Dashboard Demo_
+![ERD Mock Data](./assets/ERD.png)
+_Figure2. Mock Data ERD_
 
