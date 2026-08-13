@@ -36,5 +36,5 @@ npm run dev
 # Production start
 npm start
 ```
-![System Demo](./assets/Demo2.gif)
+![System Demo](./assets/Kooha-2026-08-13-13-57-38.webm)
 
