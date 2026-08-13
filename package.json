@@ -1,7 +1,7 @@
 {
   "name": "account-provisioning-system",
   "version": "1.0.0",
-  "description": "Event-driven account provisioning system with Choice B failure recovery",
+  "description": "Event-driven account provisioning system with failed-creation recovery logging",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",

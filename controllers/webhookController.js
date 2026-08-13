@@ -77,7 +77,7 @@ async function handleProvision(payload, req, res) {
     return respond(req, res, 201, { status: 'success', message: 'User provisioned successfully' });
 
   } catch (error) {
-    logChoiceBFailure(paymentIntentId, payload, error.message);
+    logProvisioningFailure(paymentIntentId, payload, error.message);
     return respond(req, res, 500, {
       status: 'error',
       message: 'Account creation failed. Logged for administrative recovery.'
@@ -97,7 +97,7 @@ function handleRefund(payload, req, res) {
     .get(paymentIntentId);
 
   if (!existingLog) {
-    return respond(req, res, 200, { status: 'ignored', message: 'No pending Choice B recovery for this payment intent' });
+    return respond(req, res, 200, { status: 'ignored', message: 'No pending recovery log for this payment intent' });
   }
 
   db.prepare(`
@@ -108,7 +108,7 @@ function handleRefund(payload, req, res) {
 
   return respond(req, res, 200, {
     status: 'refunded',
-    message: 'Choice B recovery marked REFUNDED'
+    message: 'Recovery log marked REFUNDED'
   });
 }
 
@@ -127,7 +127,7 @@ function handleChargeback(payload, req, res) {
     return respond(req, res, 200, { status: 'ignored', message: 'Chargeback already recorded for this payment intent' });
   }
 
-  logChoiceBFailure(
+  logProvisioningFailure(
     paymentIntentId,
     payload,
     'Unrecoverable failure: chargeback detected on payment intent. Admin transition to REFUNDED required.'
@@ -139,7 +139,7 @@ function handleChargeback(payload, req, res) {
   });
 }
 
-function logChoiceBFailure(paymentIntentId, payload, errorMessage) {
+function logProvisioningFailure(paymentIntentId, payload, errorMessage) {
   try {
     const logFailureTransaction = db.transaction(() => {
       const upsertFailureLog = db.prepare(`
@@ -160,7 +160,7 @@ function logChoiceBFailure(paymentIntentId, payload, errorMessage) {
 
     logFailureTransaction();
   } catch (loggingError) {
-    console.error('[CRITICAL] Failed to write Choice B failure log to SQLite:', loggingError);
+    console.error('[CRITICAL] Failed to write recovery log to SQLite:', loggingError);
   }
 }
 
