@@ -1,13 +1,13 @@
 Account provisioning microservice and administrative dashboard built to process online payment webhooks and automate user account creation.
 
-🚀 Quickstart & Setup
+**🚀 Quickstart & Setup**
 Prerequisites
 
     Node.js v18.x or higher
 
     npm v9.x or higher
 
-#Environment Configuration
+**Environment Configuration**
 
 Create a .env file in the root directory based on .env.example:
 ```
