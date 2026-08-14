@@ -7,6 +7,17 @@ const users = {
       .all();
   },
 
+  findPage({ limit = 8, beforeId = null } = {}) {
+    if (beforeId) {
+      return db
+        .prepare('SELECT id, email, name, payment_intent_id, created_at FROM users WHERE id < ? ORDER BY id DESC LIMIT ?')
+        .all(beforeId, limit + 1);
+    }
+    return db
+      .prepare('SELECT id, email, name, payment_intent_id, created_at FROM users ORDER BY id DESC LIMIT ?')
+      .all(limit + 1);
+  },
+
   findById(id) {
     return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
   },

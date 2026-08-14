@@ -1,0 +1,18 @@
+<div class="tabbed-panel" data-tab-group>
+    <div class="segmented-control" role="tablist" aria-label="Workspace tables">
+        <button type="button" class="segmented-pill" data-tab-trigger="users-pane" role="tab" aria-selected="false">
+            Users <span class="pill-count"><%= stats.totalUsers %></span>
+        </button>
+        <button type="button" class="segmented-pill" data-tab-trigger="failed-logs-pane" role="tab" aria-selected="false">
+            Recovery Log <span class="pill-count"><%= stats.totalFailures %></span>
+        </button>
+    </div>
+    <div class="tab-panes" data-tab-panes>
+        <section class="tab-pane" data-tab-pane="users-pane" role="tabpanel" aria-hidden="true">
+            <%- include('../organisms/usersTable', { lazy: true }) %>
+        </section>
+        <section class="tab-pane" data-tab-pane="failed-logs-pane" role="tabpanel" aria-hidden="true">
+            <%- include('../organisms/failedLogsTable', { lazy: true }) %>
+        </section>
+    </div>
+</div>

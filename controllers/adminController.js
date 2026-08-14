@@ -34,21 +34,17 @@ function handleLogout(req, res) {
 
 function getDashboard(req, res) {
   try {
-    const usersList = users.findAll();
-    const failedLogs = failedCreationLogs.findAll();
-
     const stats = {
-      totalUsers: usersList.length,
-      totalFailures: failedLogs.filter(f => f.status === LOG_STATUS.FAILED).length,
-      reprovisioned: failedLogs.filter(f => f.status === LOG_STATUS.REPROVISIONED).length,
-      refunded: failedLogs.filter(f => f.status === LOG_STATUS.REFUNDED).length
+      totalUsers: users.countAll(),
+      totalFailures: failedCreationLogs.countByStatus(LOG_STATUS.FAILED),
+      reprovisioned: failedCreationLogs.countByStatus(LOG_STATUS.REPROVISIONED),
+      refunded: failedCreationLogs.countByStatus(LOG_STATUS.REFUNDED)
     };
 
     res.render('templates/adminLayout', {
       title: 'Admin Dashboard - Account Provisioning',
       page: 'pages/dashboard.ejs',
-      users: usersList,
-      failedLogs,
+      nav: 'dashboard',
       stats,
       query: req.query
     });
@@ -56,6 +52,24 @@ function getDashboard(req, res) {
     console.error('[ADMIN DASHBOARD ERROR]:', error);
     res.status(500).send('Error rendering admin dashboard');
   }
+}
+
+function getUsersPage(req, res) {
+  res.render('templates/adminLayout', {
+    title: 'Users - Account Provisioning',
+    page: 'pages/users.ejs',
+    nav: 'users',
+    query: req.query
+  });
+}
+
+function getFailedLogsPage(req, res) {
+  res.render('templates/adminLayout', {
+    title: 'Recovery Log - Account Provisioning',
+    page: 'pages/failedLogs.ejs',
+    nav: 'failed-logs',
+    query: req.query
+  });
 }
 
 async function retryProvisioning(req, res) {
@@ -113,6 +127,8 @@ function markRefunded(req, res) {
 
 module.exports = {
   getDashboard,
+  getUsersPage,
+  getFailedLogsPage,
   retryProvisioning,
   markRefunded,
   getLoginForm,

@@ -7,6 +7,17 @@ const failedCreationLogs = {
       .all();
   },
 
+  findPage({ limit = 8, beforeId = null } = {}) {
+    if (beforeId) {
+      return db
+        .prepare('SELECT id, payment_intent_id, raw_payload, error_message, status, attempts, created_at, updated_at FROM failed_creation_logs WHERE id < ? ORDER BY id DESC LIMIT ?')
+        .all(beforeId, limit + 1);
+    }
+    return db
+      .prepare('SELECT id, payment_intent_id, raw_payload, error_message, status, attempts, created_at, updated_at FROM failed_creation_logs ORDER BY id DESC LIMIT ?')
+      .all(limit + 1);
+  },
+
   findById(id) {
     return db.prepare('SELECT * FROM failed_creation_logs WHERE id = ?').get(id);
   },
