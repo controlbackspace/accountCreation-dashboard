@@ -1,25 +1,9 @@
 const db = require('../config/database');
 const bcrypt = require('bcrypt');
+const users = require('../models/users');
+const failedCreationLogs = require('../models/failedCreationLogs');
 const { storeIdempotencyResult } = require('../middleware/idempotency');
-
-const PROVISION_EVENTS = new Set([
-  'payment.created',
-  'payment.pending',
-  'payment.paid',
-  'payment.succeeded',
-  'source.chargeable'
-]);
-
-const REFUND_EVENTS = new Set([
-  'refund.created',
-  'refund.paid',
-  'refund.succeeded'
-]);
-
-const CHARGEBACK_EVENTS = new Set([
-  'chargeback.created',
-  'chargeback.updated'
-]);
+const { EVENT_TYPES, DEFAULTS, LOG_STATUS } = require('../utils/constants');
 
 function getEventType(payload) {
   return payload && payload.data && payload.data.type;
@@ -42,15 +26,13 @@ async function handleProvision(payload, req, res) {
   const paymentIntentId = getPaymentIntentId(payload);
   const userEmail = payload?.data?.attributes?.customer_email;
   const userName = payload?.data?.attributes?.customer_name;
-  const temporaryPassword = payload?.data?.attributes?.temp_password || 'TempPass123!';
+  const temporaryPassword = payload?.data?.attributes?.temp_password || DEFAULTS.TEMP_PASSWORD;
 
   if (!paymentIntentId) {
     return respond(req, res, 400, { error: 'Missing payment intent ID' });
   }
 
-  const existingUser = db
-    .prepare('SELECT id FROM users WHERE payment_intent_id = ?')
-    .get(paymentIntentId);
+  const existingUser = users.findPaymentIntent(paymentIntentId);
 
   if (existingUser) {
     return respond(req, res, 200, { status: 'ignored', message: 'Account already provisioned' });
@@ -61,15 +43,11 @@ async function handleProvision(payload, req, res) {
       throw new Error('Payload missing required customer attributes (email or name)');
     }
 
-    const saltRounds = 10;
+    const saltRounds = DEFAULTS.BCRYPT_SALT_ROUNDS;
     const passwordHash = await bcrypt.hash(temporaryPassword, saltRounds);
 
     const createAccountTransaction = db.transaction(() => {
-      const insertUser = db.prepare(`
-        INSERT INTO users (email, name, password_hash, payment_intent_id)
-        VALUES (?, ?, ?, ?)
-      `);
-      return insertUser.run(userEmail, userName, passwordHash, paymentIntentId);
+      users.insert({ email: userEmail, name: userName, passwordHash, paymentIntentId });
     });
 
     createAccountTransaction();
@@ -92,19 +70,13 @@ function handleRefund(payload, req, res) {
     return respond(req, res, 400, { error: 'Missing payment intent ID' });
   }
 
-  const existingLog = db
-    .prepare('SELECT id FROM failed_creation_logs WHERE payment_intent_id = ?')
-    .get(paymentIntentId);
+  const existingLog = failedCreationLogs.findByPaymentIntent(paymentIntentId);
 
   if (!existingLog) {
     return respond(req, res, 200, { status: 'ignored', message: 'No pending recovery log for this payment intent' });
   }
 
-  db.prepare(`
-    UPDATE failed_creation_logs
-    SET status = 'REFUNDED', updated_at = CURRENT_TIMESTAMP
-    WHERE payment_intent_id = ?
-  `).run(paymentIntentId);
+  failedCreationLogs.setStatus(paymentIntentId, LOG_STATUS.REFUNDED);
 
   return respond(req, res, 200, {
     status: 'refunded',
@@ -119,9 +91,7 @@ function handleChargeback(payload, req, res) {
     return respond(req, res, 400, { error: 'Missing payment intent ID' });
   }
 
-  const existingLog = db
-    .prepare('SELECT id FROM failed_creation_logs WHERE payment_intent_id = ?')
-    .get(paymentIntentId);
+  const existingLog = failedCreationLogs.findByPaymentIntent(paymentIntentId);
 
   if (existingLog) {
     return respond(req, res, 200, { status: 'ignored', message: 'Chargeback already recorded for this payment intent' });
@@ -142,20 +112,11 @@ function handleChargeback(payload, req, res) {
 function logProvisioningFailure(paymentIntentId, payload, errorMessage) {
   try {
     const logFailureTransaction = db.transaction(() => {
-      const upsertFailureLog = db.prepare(`
-        INSERT INTO failed_creation_logs (payment_intent_id, raw_payload, error_message, status, attempts)
-        VALUES (?, ?, ?, 'FAILED', 1)
-        ON CONFLICT(payment_intent_id) DO UPDATE SET
-          attempts = attempts + 1,
-          error_message = excluded.error_message,
-          updated_at = CURRENT_TIMESTAMP
-      `);
-
-      upsertFailureLog.run(
+      failedCreationLogs.insert({
         paymentIntentId,
-        JSON.stringify(payload),
-        errorMessage || 'Unknown account creation failure'
-      );
+        rawPayload: JSON.stringify(payload),
+        errorMessage: errorMessage || 'Unknown account creation failure'
+      });
     });
 
     logFailureTransaction();
@@ -168,15 +129,15 @@ function handlePaymentWebhook(req, res) {
   const payload = req.body;
   const eventType = getEventType(payload);
 
-  if (!eventType || PROVISION_EVENTS.has(eventType)) {
+  if (!eventType || EVENT_TYPES.PROVISION.has(eventType)) {
     return handleProvision(payload, req, res);
   }
 
-  if (REFUND_EVENTS.has(eventType)) {
+  if (EVENT_TYPES.REFUND.has(eventType)) {
     return handleRefund(payload, req, res);
   }
 
-  if (CHARGEBACK_EVENTS.has(eventType)) {
+  if (EVENT_TYPES.CHARGEBACK.has(eventType)) {
     return handleChargeback(payload, req, res);
   }
 

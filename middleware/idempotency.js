@@ -1,4 +1,4 @@
-const db = require('../config/database');
+const idempotencyKeys = require('../models/idempotencyKeys');
 
 function resolveIdempotencyKey(req, payload) {
   const headerKey = req.get && req.get('Idempotency-Key');
@@ -35,9 +35,7 @@ function trackIdempotency(req, res, next) {
     return next();
   }
 
-  const existing = db
-    .prepare('SELECT response_status, response_payload FROM idempotency_keys WHERE event_id = ?')
-    .get(key);
+  const existing = idempotencyKeys.findByEventId(key);
 
   if (!existing) {
     req.idempotency = { key };
@@ -62,11 +60,13 @@ function storeIdempotencyResult(req, status, body) {
   const paymentIntentId =
     (data.attributes && data.attributes.payment_intent_id) || data.id || payload.id || null;
 
-  db.prepare(`
-    INSERT INTO idempotency_keys (event_id, event_type, payment_intent_id, response_status, response_payload)
-    VALUES (?, ?, ?, ?, ?)
-    ON CONFLICT(event_id) DO NOTHING
-  `).run(req.idempotency.key, eventType, paymentIntentId, status, JSON.stringify(body));
+  idempotencyKeys.insert({
+    eventId: req.idempotency.key,
+    eventType,
+    paymentIntentId,
+    responseStatus: status,
+    responsePayload: JSON.stringify(body)
+  });
 }
 
 module.exports = { trackIdempotency, storeIdempotencyResult, resolveIdempotencyKey };

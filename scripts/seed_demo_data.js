@@ -1,16 +1,21 @@
 const db = require('../config/database');
 const bcrypt = require('bcrypt');
+const users = require('../models/users');
+const failedCreationLogs = require('../models/failedCreationLogs');
+const idempotencyKeys = require('../models/idempotencyKeys');
+const { DEFAULTS, LOG_STATUS } = require('../utils/constants');
 
 (async () => {
+  // sessions table is owned by better-sqlite3-session-store, so it stays direct here
   const reset = db.transaction(() => {
-    db.prepare('DELETE FROM idempotency_keys').run();
+    idempotencyKeys.clear();
     db.prepare('DELETE FROM sessions').run();
-    db.prepare('DELETE FROM failed_creation_logs').run();
-    db.prepare('DELETE FROM users').run();
+    failedCreationLogs.clear();
+    users.clear();
   });
   reset();
 
-  const users = [
+  const seedUsers = [
     ['maria.santos@gmail.com', 'Maria Santos', 'pi_live_1001', '2026-08-10 09:15:00'],
     ['jose.ramirez@gmail.com', 'Jose Ramirez', 'pi_live_1002', '2026-08-10 10:02:00'],
     ['ana.reyes@yahoo.com', 'Ana Reyes', 'pi_live_1003', '2026-08-11 11:30:00'],
@@ -21,10 +26,9 @@ const bcrypt = require('bcrypt');
     ['renato.silva@outlook.com', 'Renato Silva', 'pi_live_1008', '2026-08-12 11:40:00']
   ];
 
-  const insUser = db.prepare('INSERT INTO users (email, name, password_hash, payment_intent_id, created_at) VALUES (?, ?, ?, ?, ?)');
-  for (const [email, name, pi, created] of users) {
-    const hash = await bcrypt.hash('TempPass123!', 10);
-    insUser.run(email, name, hash, pi, created);
+  for (const [email, name, pi, created] of seedUsers) {
+    const hash = await bcrypt.hash(DEFAULTS.TEMP_PASSWORD, DEFAULTS.BCRYPT_SALT_ROUNDS);
+    users.insertSeed({ email, name, passwordHash: hash, paymentIntentId: pi, createdAt: created });
   }
 
   // Build a webhook payload; pass email/name as null to simulate missing attributes
@@ -32,99 +36,70 @@ const bcrypt = require('bcrypt');
     const attributes = {};
     if (email) attributes.customer_email = email;
     if (name) attributes.customer_name = name;
-    attributes.temp_password = 'TempPass123!';
+    attributes.temp_password = DEFAULTS.TEMP_PASSWORD;
     return JSON.stringify({
       data: { id, type: type || 'payment.paid', attributes }
     });
   };
 
-  const insLog = db.prepare([
-    'INSERT INTO failed_creation_logs',
-    '(payment_intent_id, raw_payload, error_message, status, attempts, created_at, updated_at)',
-    'VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ].join(' '));
+  const failures = [
+    // ===== FAILED (retryable transient) — valid payloads, Retry will succeed =====
+    { pi: 'pi_fail_2001', email: 'andres.villanueva@gmail.com', name: 'Andres Villanueva', err: 'Database write lock timeout during webhook execution', status: LOG_STATUS.FAILED, attempts: 2, created: '2026-08-12 09:05:00', updated: '2026-08-12 09:06:30' },
+    { pi: 'pi_fail_2003', email: 'marco.delacruz@gmail.com', name: 'Marco Dela Cruz', err: 'Network timeout while waiting for payment gateway response', status: LOG_STATUS.FAILED, attempts: 3, created: '2026-08-12 11:15:00', updated: '2026-08-12 11:16:45' },
+    { pi: 'pi_fail_2004', email: 'jenna.ramos@yahoo.com', name: 'Jenna Ramos', err: 'Temporary database connection reset', status: LOG_STATUS.FAILED, attempts: 1, created: '2026-08-13 08:40:00', updated: '2026-08-13 08:40:20' },
+    { pi: 'pi_fail_2005', email: 'vince.ocampo@gmail.com', name: 'Vince Ocampo', err: 'bcrypt hashing resource exhaustion (server under load)', status: LOG_STATUS.FAILED, attempts: 4, created: '2026-08-13 10:02:00', updated: '2026-08-13 10:04:00' },
+    // Provider returned HTTP 503 (temporary), payload is valid so Retry succeeds
+    { pi: 'pi_fail_2010', email: 'isabel.flores@yahoo.com', name: 'Isabel Flores', err: 'Payment gateway responded with HTTP 503 Service Unavailable', status: LOG_STATUS.FAILED, attempts: 2, created: '2026-08-13 13:10:00', updated: '2026-08-13 13:11:20' },
+    // Upstream webhook worker crashed mid-transaction
+    { pi: 'pi_fail_2011', email: 'andrea.salazar@gmail.com', name: 'Andrea Salazar', err: 'Webhook worker crashed mid-transaction, no commit was made', status: LOG_STATUS.FAILED, attempts: 1, created: '2026-08-13 14:25:00', updated: '2026-08-13 14:25:05' },
+    // Slow third-party integration call timed out
+    { pi: 'pi_fail_2012', email: 'kyle.manalo@outlook.com', name: 'Kyle Manalo', err: 'Timed out calling external ID verification service', status: LOG_STATUS.FAILED, attempts: 3, created: '2026-08-13 15:00:00', updated: '2026-08-13 15:03:30' },
 
-  // ===== FAILED (retryable transient) — valid payloads, Retry will succeed =====
-  insLog.run('pi_fail_2001', mkPayload('pi_fail_2001', 'andres.villanueva@gmail.com', 'Andres Villanueva'),
-    'Database write lock timeout during webhook execution', 'FAILED', 2, '2026-08-12 09:05:00', '2026-08-12 09:06:30');
+    // ===== FAILED (unrecoverable) — Retry will keep failing; Mark Refunded is the path =====
+    // Chargeback — money contested, admin must resolve
+    { pi: 'pi_fail_2002', email: 'karina.delossantos@gmail.com', name: 'Karina Delos Santos', err: 'Unrecoverable failure: chargeback detected on payment intent. Admin transition to REFUNDED required.', status: LOG_STATUS.FAILED, attempts: 1, created: '2026-08-12 10:30:00', updated: '2026-08-12 10:30:00' },
+    // Missing customer email in payload
+    { pi: 'pi_fail_2006', email: null, name: 'Nathaniel Cruz', err: 'Payload missing required customer attributes (email or name)', status: LOG_STATUS.FAILED, attempts: 1, created: '2026-08-12 14:22:00', updated: '2026-08-12 14:22:10' },
+    // Missing customer name in payload
+    { pi: 'pi_fail_2007', email: 'trisha.villanueva@gmail.com', name: null, err: 'Payload missing required customer attributes (email or name)', status: LOG_STATUS.FAILED, attempts: 2, created: '2026-08-13 09:10:00', updated: '2026-08-13 09:12:00' },
+    // Duplicate email — UNIQUE constraint on users.email blocks insertion
+    { pi: 'pi_fail_2008', email: 'maria.santos@gmail.com', name: 'Maria Santos', err: 'SQLITE_CONSTRAINT_UNIQUE: UNIQUE constraint failed: users.email', status: LOG_STATUS.FAILED, attempts: 3, created: '2026-08-13 11:30:00', updated: '2026-08-13 11:32:00' },
+    // Corrupted payload — raw_payload is not valid JSON, Retry will throw on parse
+    { pi: 'pi_fail_2009', raw: '{"data": {"id": "pi_fail_2009", "type": "payment.paid", "attributes": {"customer_email": "gabby.tan@gmail.com"', err: 'Malformed payload: raw payload could not be parsed', status: LOG_STATUS.FAILED, attempts: 1, created: '2026-08-13 12:00:00', updated: '2026-08-13 12:00:05' },
+    // Invalid email format — fails validation, Retry keeps failing
+    { pi: 'pi_fail_2013', email: 'not-an-email', name: 'Paolo Villanueva', err: 'Invalid customer email format in payload', status: LOG_STATUS.FAILED, attempts: 2, created: '2026-08-13 16:10:00', updated: '2026-08-13 16:12:00' },
+    // Payment intent already expired/voided at the gateway while stuck in FAILED
+    { pi: 'pi_fail_2014', email: 'cristina.abad@gmail.com', name: 'Cristina Abad', err: 'Unrecoverable failure: payment intent expired. Admin transition to REFUNDED required.', status: LOG_STATUS.FAILED, attempts: 1, created: '2026-08-13 17:30:00', updated: '2026-08-13 17:30:40' },
 
-  insLog.run('pi_fail_2003', mkPayload('pi_fail_2003', 'marco.delacruz@gmail.com', 'Marco Dela Cruz'),
-    'Network timeout while waiting for payment gateway response', 'FAILED', 3, '2026-08-12 11:15:00', '2026-08-12 11:16:45');
+    // ===== REPROVISIONED - recovered via admin Retry =====
+    { pi: 'pi_repro_3001', email: 'ramon.aquino@gmail.com', name: 'Ramon Aquino', err: 'Simulated lock timeout during initial webhook execution', status: LOG_STATUS.REPROVISIONED, attempts: 2, created: '2026-08-11 13:00:00', updated: '2026-08-11 13:10:00' },
+    { pi: 'pi_repro_3002', email: 'elena.mendoza@yahoo.com', name: 'Elena Mendoza', err: 'Payload missing required customer attributes', status: LOG_STATUS.REPROVISIONED, attempts: 3, created: '2026-08-12 07:45:00', updated: '2026-08-12 08:00:00' },
+    // Was stuck in FAILED, then a gateway retry succeeded on its own
+    { pi: 'pi_repro_3003', email: 'daryl.castillo@gmail.com', name: 'Daryl Castillo', err: 'Gateway retried delivery automatically after transient failure', status: LOG_STATUS.REPROVISIONED, attempts: 4, created: '2026-08-12 16:30:00', updated: '2026-08-12 16:45:00' },
+    { pi: 'pi_repro_3004', email: 'camille.roa@outlook.com', name: 'Camille Roa', err: 'Database write lock timeout during webhook execution', status: LOG_STATUS.REPROVISIONED, attempts: 2, created: '2026-08-13 06:20:00', updated: '2026-08-13 06:25:00' },
 
-  insLog.run('pi_fail_2004', mkPayload('pi_fail_2004', 'jenna.ramos@yahoo.com', 'Jenna Ramos'),
-    'Temporary database connection reset', 'FAILED', 1, '2026-08-13 08:40:00', '2026-08-13 08:40:20');
+    // ===== REFUNDED - terminal, money returned =====
+    { pi: 'pi_refund_4001', email: 'paolo.garcia@gmail.com', name: 'Paolo Garcia', err: 'Payload missing required customer attributes', status: LOG_STATUS.REFUNDED, attempts: 3, created: '2026-08-10 16:20:00', updated: '2026-08-10 17:05:00' },
+    { pi: 'pi_refund_4002', email: 'sofia.navarro@outlook.com', name: 'Sofia Navarro', err: 'Payment refunded after repeated provisioning failures', status: LOG_STATUS.REFUNDED, attempts: 5, created: '2026-08-11 15:50:00', updated: '2026-08-11 16:40:00' },
+    { pi: 'pi_refund_4003', email: 'julian.mercado@gmail.com', name: 'Julian Mercado', err: 'Customer requested cancellation, money returned', status: LOG_STATUS.REFUNDED, attempts: 4, created: '2026-08-13 18:20:00', updated: '2026-08-13 18:50:00' }
+  ];
 
-  insLog.run('pi_fail_2005', mkPayload('pi_fail_2005', 'vince.ocampo@gmail.com', 'Vince Ocampo'),
-    'bcrypt hashing resource exhaustion (server under load)', 'FAILED', 4, '2026-08-13 10:02:00', '2026-08-13 10:04:00');
+  for (const f of failures) {
+    const rawPayload = f.raw || mkPayload(f.pi, f.email, f.name);
+    failedCreationLogs.insertSeed({
+      paymentIntentId: f.pi,
+      rawPayload,
+      errorMessage: f.err,
+      status: f.status,
+      attempts: f.attempts,
+      createdAt: f.created,
+      updatedAt: f.updated
+    });
+  }
 
-  // Provider returned HTTP 503 (temporary), payload is valid so Retry succeeds
-  insLog.run('pi_fail_2010', mkPayload('pi_fail_2010', 'isabel.flores@yahoo.com', 'Isabel Flores'),
-    'Payment gateway responded with HTTP 503 Service Unavailable', 'FAILED', 2, '2026-08-13 13:10:00', '2026-08-13 13:11:20');
-
-  // Upstream webhook worker crashed mid-transaction
-  insLog.run('pi_fail_2011', mkPayload('pi_fail_2011', 'andrea.salazar@gmail.com', 'Andrea Salazar'),
-    'Webhook worker crashed mid-transaction, no commit was made', 'FAILED', 1, '2026-08-13 14:25:00', '2026-08-13 14:25:05');
-
-  // Slow third-party integration call timed out
-  insLog.run('pi_fail_2012', mkPayload('pi_fail_2012', 'kyle.manalo@outlook.com', 'Kyle Manalo'),
-    'Timed out calling external ID verification service', 'FAILED', 3, '2026-08-13 15:00:00', '2026-08-13 15:03:30');
-
-  // ===== FAILED (unrecoverable) — Retry will keep failing; Mark Refunded is the path =====
-  // Chargeback — money contested, admin must resolve
-  insLog.run('pi_fail_2002', mkPayload('pi_fail_2002', 'karina.delossantos@gmail.com', 'Karina Delos Santos'),
-    'Unrecoverable failure: chargeback detected on payment intent. Admin transition to REFUNDED required.', 'FAILED', 1, '2026-08-12 10:30:00', '2026-08-12 10:30:00');
-
-  // Missing customer email in payload
-  insLog.run('pi_fail_2006', mkPayload('pi_fail_2006', null, 'Nathaniel Cruz'),
-    'Payload missing required customer attributes (email or name)', 'FAILED', 1, '2026-08-12 14:22:00', '2026-08-12 14:22:10');
-
-  // Missing customer name in payload
-  insLog.run('pi_fail_2007', mkPayload('pi_fail_2007', 'trisha.villanueva@gmail.com', null),
-    'Payload missing required customer attributes (email or name)', 'FAILED', 2, '2026-08-13 09:10:00', '2026-08-13 09:12:00');
-
-  // Duplicate email — UNIQUE constraint on users.email blocks insertion
-  insLog.run('pi_fail_2008', mkPayload('pi_fail_2008', 'maria.santos@gmail.com', 'Maria Santos'),
-    'SQLITE_CONSTRAINT_UNIQUE: UNIQUE constraint failed: users.email', 'FAILED', 3, '2026-08-13 11:30:00', '2026-08-13 11:32:00');
-
-  // Corrupted payload — raw_payload is not valid JSON, Retry will throw on parse
-  insLog.run('pi_fail_2009', '{"data": {"id": "pi_fail_2009", "type": "payment.paid", "attributes": {"customer_email": "gabby.tan@gmail.com"',
-    'Malformed payload: raw payload could not be parsed', 'FAILED', 1, '2026-08-13 12:00:00', '2026-08-13 12:00:05');
-
-  // Invalid email format — fails validation, Retry keeps failing
-  insLog.run('pi_fail_2013', mkPayload('pi_fail_2013', 'not-an-email', 'Paolo Villanueva'),
-    'Invalid customer email format in payload', 'FAILED', 2, '2026-08-13 16:10:00', '2026-08-13 16:12:00');
-
-  // Payment intent already expired/voided at the gateway while stuck in FAILED
-  insLog.run('pi_fail_2014', mkPayload('pi_fail_2014', 'cristina.abad@gmail.com', 'Cristina Abad'),
-    'Unrecoverable failure: payment intent expired. Admin transition to REFUNDED required.', 'FAILED', 1, '2026-08-13 17:30:00', '2026-08-13 17:30:40');
-
-  // ===== REPROVISIONED - recovered via admin Retry =====
-  insLog.run('pi_repro_3001', mkPayload('pi_repro_3001', 'ramon.aquino@gmail.com', 'Ramon Aquino'),
-    'Simulated lock timeout during initial webhook execution', 'REPROVISIONED', 2, '2026-08-11 13:00:00', '2026-08-11 13:10:00');
-
-  insLog.run('pi_repro_3002', mkPayload('pi_repro_3002', 'elena.mendoza@yahoo.com', 'Elena Mendoza'),
-    'Payload missing required customer attributes', 'REPROVISIONED', 3, '2026-08-12 07:45:00', '2026-08-12 08:00:00');
-
-  // Was stuck in FAILED, then a gateway retry succeeded on its own
-  insLog.run('pi_repro_3003', mkPayload('pi_repro_3003', 'daryl.castillo@gmail.com', 'Daryl Castillo'),
-    'Gateway retried delivery automatically after transient failure', 'REPROVISIONED', 4, '2026-08-12 16:30:00', '2026-08-12 16:45:00');
-
-  insLog.run('pi_repro_3004', mkPayload('pi_repro_3004', 'camille.roa@outlook.com', 'Camille Roa'),
-    'Database write lock timeout during webhook execution', 'REPROVISIONED', 2, '2026-08-13 06:20:00', '2026-08-13 06:25:00');
-
-  // ===== REFUNDED - terminal, money returned =====
-  insLog.run('pi_refund_4001', mkPayload('pi_refund_4001', 'paolo.garcia@gmail.com', 'Paolo Garcia'),
-    'Payload missing required customer attributes', 'REFUNDED', 3, '2026-08-10 16:20:00', '2026-08-10 17:05:00');
-
-  insLog.run('pi_refund_4002', mkPayload('pi_refund_4002', 'sofia.navarro@outlook.com', 'Sofia Navarro'),
-    'Payment refunded after repeated provisioning failures', 'REFUNDED', 5, '2026-08-11 15:50:00', '2026-08-11 16:40:00');
-
-  insLog.run('pi_refund_4003', mkPayload('pi_refund_4003', 'julian.mercado@gmail.com', 'Julian Mercado'),
-    'Customer requested cancellation, money returned', 'REFUNDED', 4, '2026-08-13 18:20:00', '2026-08-13 18:50:00');
-
-  console.log('users:', db.prepare('SELECT COUNT(*) c FROM users').get().c);
-  console.log('failed logs:', db.prepare('SELECT COUNT(*) c FROM failed_creation_logs').get().c);
-  console.log('status spread:', JSON.stringify(db.prepare('SELECT status, COUNT(*) c FROM failed_creation_logs GROUP BY status').all()));
-  console.log('idempotency:', db.prepare('SELECT COUNT(*) c FROM idempotency_keys').get().c);
+  console.log('users:', users.countAll());
+  console.log('failed logs:', failedCreationLogs.countAll());
+  console.log('status spread:', JSON.stringify(failedCreationLogs.statusSpread()));
+  console.log('idempotency:', idempotencyKeys.countAll ? idempotencyKeys.countAll() : 0);
   console.log('sessions:', db.prepare('SELECT COUNT(*) c FROM sessions').get().c);
 })();

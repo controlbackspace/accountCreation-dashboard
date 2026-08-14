@@ -1,0 +1,45 @@
+const db = require('../config/database');
+
+const users = {
+  findAll() {
+    return db
+      .prepare('SELECT id, email, name, payment_intent_id, created_at FROM users ORDER BY created_at DESC')
+      .all();
+  },
+
+  findById(id) {
+    return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  },
+
+  findByEmail(email) {
+    return db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  },
+
+  findPaymentIntent(paymentIntentId) {
+    return db.prepare('SELECT id FROM users WHERE payment_intent_id = ?').get(paymentIntentId);
+  },
+
+  insert({ email, name, passwordHash, paymentIntentId }) {
+    return db.prepare(`
+      INSERT INTO users (email, name, password_hash, payment_intent_id)
+      VALUES (?, ?, ?, ?)
+    `).run(email, name, passwordHash, paymentIntentId);
+  },
+
+  insertSeed({ email, name, passwordHash, paymentIntentId, createdAt }) {
+    return db.prepare(`
+      INSERT INTO users (email, name, password_hash, payment_intent_id, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(email, name, passwordHash, paymentIntentId, createdAt);
+  },
+
+  countAll() {
+    return db.prepare('SELECT COUNT(*) c FROM users').get().c;
+  },
+
+  clear() {
+    return db.prepare('DELETE FROM users').run();
+  }
+};
+
+module.exports = users;

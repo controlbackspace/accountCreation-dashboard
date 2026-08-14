@@ -1,6 +1,9 @@
 const db = require('../config/database');
 const bcrypt = require('bcrypt');
+const users = require('../models/users');
+const failedCreationLogs = require('../models/failedCreationLogs');
 const { loginAdmin, logoutAdmin } = require('../middleware/auth');
+const { DEFAULTS, LOG_STATUS } = require('../utils/constants');
 
 function getLoginForm(req, res) {
   res.render('pages/login', {
@@ -31,25 +34,20 @@ function handleLogout(req, res) {
 
 function getDashboard(req, res) {
   try {
-    const users = db
-      .prepare('SELECT id, email, name, payment_intent_id, created_at FROM users ORDER BY created_at DESC')
-      .all();
-
-    const failedLogs = db
-      .prepare('SELECT id, payment_intent_id, raw_payload, error_message, status, attempts, created_at, updated_at FROM failed_creation_logs ORDER BY created_at DESC')
-      .all();
+    const usersList = users.findAll();
+    const failedLogs = failedCreationLogs.findAll();
 
     const stats = {
-      totalUsers: users.length,
-      totalFailures: failedLogs.filter(f => f.status === 'FAILED').length,
-      reprovisioned: failedLogs.filter(f => f.status === 'REPROVISIONED').length,
-      refunded: failedLogs.filter(f => f.status === 'REFUNDED').length
+      totalUsers: usersList.length,
+      totalFailures: failedLogs.filter(f => f.status === LOG_STATUS.FAILED).length,
+      reprovisioned: failedLogs.filter(f => f.status === LOG_STATUS.REPROVISIONED).length,
+      refunded: failedLogs.filter(f => f.status === LOG_STATUS.REFUNDED).length
     };
 
     res.render('templates/adminLayout', {
       title: 'Admin Dashboard - Account Provisioning',
       page: 'pages/dashboard.ejs',
-      users,
+      users: usersList,
       failedLogs,
       stats,
       query: req.query
@@ -63,9 +61,7 @@ function getDashboard(req, res) {
 async function retryProvisioning(req, res) {
   const logId = req.params.id;
 
-  const logEntry = db
-    .prepare('SELECT * FROM failed_creation_logs WHERE id = ?')
-    .get(logId);
+  const logEntry = failedCreationLogs.findById(logId);
 
   if (!logEntry) {
     return res.redirect('/admin/dashboard?error=Log+entry+not+found');
@@ -76,26 +72,18 @@ async function retryProvisioning(req, res) {
     const paymentIntentId = logEntry.payment_intent_id;
     const userEmail = payload?.data?.attributes?.customer_email;
     const userName = payload?.data?.attributes?.customer_name;
-    const temporaryPassword = payload?.data?.attributes?.temp_password || 'TempPass123!';
+    const temporaryPassword = payload?.data?.attributes?.temp_password || DEFAULTS.TEMP_PASSWORD;
 
     if (!userEmail || !userName) {
       throw new Error('Payload missing required customer attributes');
     }
 
-    const saltRounds = 10;
+    const saltRounds = DEFAULTS.BCRYPT_SALT_ROUNDS;
     const passwordHash = await bcrypt.hash(temporaryPassword, saltRounds);
 
     const retryTransaction = db.transaction(() => {
-      db.prepare(`
-        INSERT INTO users (email, name, password_hash, payment_intent_id)
-        VALUES (?, ?, ?, ?)
-      `).run(userEmail, userName, passwordHash, paymentIntentId);
-
-      db.prepare(`
-        UPDATE failed_creation_logs
-        SET status = 'REPROVISIONED', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-      `).run(logId);
+      users.insert({ email: userEmail, name: userName, passwordHash, paymentIntentId });
+      failedCreationLogs.markReprovisioned(logId);
     });
 
     retryTransaction();
@@ -103,11 +91,7 @@ async function retryProvisioning(req, res) {
     return res.redirect('/admin/dashboard?success=Account+successfully+re-provisioned');
 
   } catch (error) {
-    db.prepare(`
-      UPDATE failed_creation_logs
-      SET attempts = attempts + 1, error_message = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(error.message, logId);
+    failedCreationLogs.incrementAttemptsAndUpdateMessage(logId, error.message);
 
     return res.redirect(`/admin/dashboard?error=${encodeURIComponent('Retry failed: ' + error.message)}`);
   }
@@ -116,19 +100,13 @@ async function retryProvisioning(req, res) {
 function markRefunded(req, res) {
   const logId = req.params.id;
 
-  const logEntry = db
-    .prepare('SELECT * FROM failed_creation_logs WHERE id = ?')
-    .get(logId);
+  const logEntry = failedCreationLogs.findById(logId);
 
   if (!logEntry) {
     return res.redirect('/admin/dashboard?error=Log+entry+not+found');
   }
 
-  db.prepare(`
-    UPDATE failed_creation_logs
-    SET status = 'REFUNDED', updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(logId);
+  failedCreationLogs.setStatus(logEntry.payment_intent_id, LOG_STATUS.REFUNDED);
 
   return res.redirect('/admin/dashboard?success=Log+marked+as+refunded');
 }
