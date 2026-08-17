@@ -2,6 +2,8 @@ const express = require('express');
 
 const router = express.Router();
 
+const rateLimit = require('express-rate-limit');
+
 const { createAdminSession, requireAdmin } = require('../middleware/auth');
 const { generateCsrf, verifyCsrf } = require('../middleware/csrf');
 const {
@@ -16,11 +18,19 @@ const {
 } = require('../controllers/adminController');
 const { listUsers, listFailedLogs } = require('../controllers/adminApiController');
 
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts, please retry later.' }
+});
+
 router.use(createAdminSession());
 
 // open: login/logout, no auth yet
 router.get('/login', generateCsrf, getLoginForm);
-router.post('/login', verifyCsrf, handleLogin);
+router.post('/login', loginLimiter, verifyCsrf, handleLogin);
 router.post('/logout', verifyCsrf, handleLogout);
 
 // below here: everything needs a logged in admin

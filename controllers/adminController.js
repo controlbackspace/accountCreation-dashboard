@@ -4,6 +4,7 @@ const users = require('../models/users');
 const failedCreationLogs = require('../models/failedCreationLogs');
 const { loginAdmin, logoutAdmin } = require('../middleware/auth');
 const { DEFAULTS, LOG_STATUS } = require('../utils/constants');
+const { MAX_LENGTHS, cleanText, safeReturnTo, validateCustomerAttributes } = require('../utils/validation');
 
 function getLoginForm(req, res) {
   res.render('pages/login', {
@@ -15,17 +16,18 @@ function getLoginForm(req, res) {
 function handleLogin(req, res) {
   const { username, password, returnTo } = req.body || {};
 
-  if (!loginAdmin(req, username, password)) {
-    const query = returnTo
-      ? `?error=${encodeURIComponent('Invalid credentials.')}&returnTo=${encodeURIComponent(returnTo)}`
+  const cleanUsername = cleanText(username, { maxLength: MAX_LENGTHS.USERNAME, required: true });
+  const cleanPassword = cleanText(password, { maxLength: MAX_LENGTHS.PASSWORD, required: true, trim: false });
+
+  if (!cleanUsername || !cleanPassword || !loginAdmin(req, cleanUsername, cleanPassword)) {
+    const safeTarget = safeReturnTo(returnTo);
+    const query = safeTarget
+      ? `?error=${encodeURIComponent('Invalid credentials.')}&returnTo=${encodeURIComponent(safeTarget)}`
       : '?error=Invalid+credentials';
     return res.redirect('/admin/login' + query);
   }
 
-  const target = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//')
-    ? returnTo
-    : '/admin/dashboard';
-  return res.redirect(target);
+  return res.redirect(safeReturnTo(returnTo) || '/admin/dashboard');
 }
 
 function handleLogout(req, res) {
@@ -86,16 +88,16 @@ async function retryProvisioning(req, res) {
   try {
     const payload = JSON.parse(logEntry.raw_payload);
     const paymentIntentId = logEntry.payment_intent_id;
-    const userEmail = payload?.data?.attributes?.customer_email;
-    const userName = payload?.data?.attributes?.customer_name;
-    const temporaryPassword = payload?.data?.attributes?.temp_password || DEFAULTS.TEMP_PASSWORD;
+    const attributes = payload?.data?.attributes || {};
 
-    if (!userEmail || !userName) {
-      throw new Error('Payload missing required customer attributes');
-    }
+    const { email: userEmail, name: userName, temporaryPassword } = validateCustomerAttributes({
+      email: attributes.customer_email,
+      name: attributes.customer_name,
+      temporaryPassword: attributes.temp_password
+    });
 
     const saltRounds = DEFAULTS.BCRYPT_SALT_ROUNDS;
-    const passwordHash = await bcrypt.hash(temporaryPassword, saltRounds);
+    const passwordHash = await bcrypt.hash(temporaryPassword || DEFAULTS.TEMP_PASSWORD, saltRounds);
 
     const retryTransaction = db.transaction(() => {
       users.insert({ email: userEmail, name: userName, passwordHash, paymentIntentId });

@@ -6,6 +6,7 @@ const { assertEnvironment } = require('./config/envCheck');
 assertEnvironment();
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
 // view engine: ejs
@@ -16,6 +17,7 @@ app.set('views', path.join(__dirname, 'views'));
 // connect this to verifyHmac middleware
 app.use(
   express.json({
+    limit: '32kb',
     verify: (req, res, buf) => {
       req.rawBody = buf;
     },
@@ -23,7 +25,7 @@ app.use(
 );
 
 // admin forms are urlencoded
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '32kb' }));
 
 // static assets
 app.use(express.static(path.join(__dirname, 'public')));

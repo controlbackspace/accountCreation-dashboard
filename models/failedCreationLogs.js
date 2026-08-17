@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { MAX_LENGTHS, escapeLike } = require('../utils/validation');
 
 const failedCreationLogs = {
   findAll() {
@@ -9,8 +10,11 @@ const failedCreationLogs = {
 
   findPage({ limit = 8, beforeId = null, q = null } = {}) {
     const columns = 'id, payment_intent_id, raw_payload, error_message, status, attempts, created_at, updated_at';
-    const where = q ? ' WHERE (payment_intent_id LIKE ? OR error_message LIKE ? OR status LIKE ?)' : '';
-    const search = q ? [`%${q}%`, `%${q}%`, `%${q}%`] : [];
+    const cleanQ = q ? escapeLike(q.trim()).slice(0, MAX_LENGTHS.SEARCH) : null;
+    const where = cleanQ
+      ? " WHERE (payment_intent_id LIKE ? ESCAPE '\\' OR error_message LIKE ? ESCAPE '\\' OR status LIKE ? ESCAPE '\\')"
+      : '';
+    const search = cleanQ ? [`%${cleanQ}%`, `%${cleanQ}%`, `%${cleanQ}%`] : [];
     if (beforeId) {
       return db
         .prepare(`SELECT ${columns} FROM failed_creation_logs${where}${where ? ' AND' : ' WHERE'} id < ? ORDER BY id DESC LIMIT ?`)

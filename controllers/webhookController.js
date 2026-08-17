@@ -4,6 +4,7 @@ const users = require('../models/users');
 const failedCreationLogs = require('../models/failedCreationLogs');
 const { storeIdempotencyResult } = require('../middleware/idempotency');
 const { EVENT_TYPES, DEFAULTS, LOG_STATUS } = require('../utils/constants');
+const { MAX_LENGTHS, validateCustomerAttributes } = require('../utils/validation');
 
 function getEventType(payload) {
   return payload && payload.data && payload.data.type;
@@ -24,12 +25,10 @@ function respond(req, res, status, body) {
 
 async function handleProvision(payload, req, res) {
   const paymentIntentId = getPaymentIntentId(payload);
-  const userEmail = payload?.data?.attributes?.customer_email;
-  const userName = payload?.data?.attributes?.customer_name;
-  const temporaryPassword = payload?.data?.attributes?.temp_password || DEFAULTS.TEMP_PASSWORD;
+  const attributes = payload?.data?.attributes || {};
 
-  if (!paymentIntentId) {
-    return respond(req, res, 400, { error: 'Missing payment intent ID' });
+  if (!paymentIntentId || paymentIntentId.length > MAX_LENGTHS.PAYMENT_INTENT_ID) {
+    return respond(req, res, 400, { error: 'Missing or invalid payment intent ID' });
   }
 
   const existingUser = users.findPaymentIntent(paymentIntentId);
@@ -39,12 +38,14 @@ async function handleProvision(payload, req, res) {
   }
 
   try {
-    if (!userEmail || !userName) {
-      throw new Error('Payload missing required customer attributes (email or name)');
-    }
+    const { email: userEmail, name: userName, temporaryPassword } = validateCustomerAttributes({
+      email: attributes.customer_email,
+      name: attributes.customer_name,
+      temporaryPassword: attributes.temp_password
+    });
 
     const saltRounds = DEFAULTS.BCRYPT_SALT_ROUNDS;
-    const passwordHash = await bcrypt.hash(temporaryPassword, saltRounds);
+    const passwordHash = await bcrypt.hash(temporaryPassword || DEFAULTS.TEMP_PASSWORD, saltRounds);
 
     const createAccountTransaction = db.transaction(() => {
       users.insert({ email: userEmail, name: userName, passwordHash, paymentIntentId });

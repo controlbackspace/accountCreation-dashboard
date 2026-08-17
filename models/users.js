@@ -1,4 +1,5 @@
 const db = require('../config/database');
+const { MAX_LENGTHS, escapeLike } = require('../utils/validation');
 
 const users = {
   findAll() {
@@ -9,8 +10,9 @@ const users = {
 
   findPage({ limit = 8, beforeId = null, q = null } = {}) {
     const columns = 'id, email, name, payment_intent_id, created_at';
-    const where = q ? ' WHERE (email LIKE ? OR name LIKE ?)' : '';
-    const search = q ? [`%${q}%`, `%${q}%`] : [];
+    const cleanQ = q ? escapeLike(q.trim()).slice(0, MAX_LENGTHS.SEARCH) : null;
+    const where = cleanQ ? " WHERE (email LIKE ? ESCAPE '\\' OR name LIKE ? ESCAPE '\\')" : '';
+    const search = cleanQ ? [`%${cleanQ}%`, `%${cleanQ}%`] : [];
     if (beforeId) {
       return db
         .prepare(`SELECT ${columns} FROM users${where}${where ? ' AND' : ' WHERE'} id < ? ORDER BY id DESC LIMIT ?`)
