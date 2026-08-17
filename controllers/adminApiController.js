@@ -31,14 +31,16 @@ function buildPage(rows, limit) {
 function listUsers(req, res) {
   const limit = parseLimit(req.query.limit);
   const beforeId = parseCursor(req.query.cursor);
-  const rows = users.findPage({ limit, beforeId });
+  const q = (req.query.q || '').trim() || null;
+  const rows = users.findPage({ limit, beforeId, q });
   res.json(buildPage(rows, limit));
 }
 
 function listFailedLogs(req, res) {
   const limit = parseLimit(req.query.limit);
   const beforeId = parseCursor(req.query.cursor);
-  const rows = failedCreationLogs.findPage({ limit, beforeId });
+  const q = (req.query.q || '').trim() || null;
+  const rows = failedCreationLogs.findPage({ limit, beforeId, q });
   res.json(buildPage(rows, limit));
 }
 

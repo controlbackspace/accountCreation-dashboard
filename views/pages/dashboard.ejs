@@ -1,10 +1,39 @@
 <div class="stats-grid">
-    <%- include('../molecules/statCard', { title: 'Active Provisioned Users', value: stats.totalUsers, color: '#333' }) %>
-    <%- include('../molecules/statCard', { title: 'Active Failure Queue', value: stats.totalFailures, color: '#d81b60' }) %>
-    <%- include('../molecules/statCard', { title: 'Re-provisioned via Retry', value: stats.reprovisioned, color: '#198754' }) %>
-    <%- include('../molecules/statCard', { title: 'Marked Refunded', value: stats.refunded || 0, color: '#6c757d' }) %>
+    <%- include('../molecules/statCard', { title: 'Active Provisioned Users', value: stats.totalUsers, color: '#333', link: '/admin/users' }) %>
+    <%- include('../molecules/statCard', { title: 'Active Failure Queue', value: stats.totalFailures, color: '#d81b60', link: '/admin/failed-logs' }) %>
+    <%- include('../molecules/statCard', { title: 'Re-provisioned via Retry', value: stats.reprovisioned, color: '#198754', link: '/admin/failed-logs' }) %>
+    <%- include('../molecules/statCard', { title: 'Marked Refunded', value: stats.refunded || 0, color: '#6c757d', link: '/admin/failed-logs' }) %>
 </div>
 
-<%- include('../organisms/tabbedPanel') %>
+<div class="dashboard-alerts">
+    <div class="card">
+        <h2>Quick Health Summary</h2>
+        <% if (stats.totalFailures > 0) { %>
+            <p class="health-badge health-badge--warn">Attention needed: <%= stats.totalFailures %> payment event(s) are stuck in the failure queue.</p>
+        <% } else { %>
+            <p class="health-badge health-badge--ok">All systems healthy - no failed account creations.</p>
+        <% } %>
+        <p class="health-note">Active users: <%= stats.totalUsers %> &middot; Re-provisioned: <%= stats.reprovisioned %> &middot; Refunded: <%= stats.refunded || 0 %></p>
+    </div>
 
-<script src="/js/loadTable.js"></script>
+    <div class="card">
+        <h2>Recent Critical Alerts</h2>
+        <% if (recentAlerts && recentAlerts.length) { %>
+            <ul class="alert-list">
+                <% recentAlerts.forEach(a => { %>
+                    <li class="alert-item">
+                        <div class="alert-item__head">
+                            <span class="alert-status">FAILED</span>
+                            <code class="alert-intent"><%= a.payment_intent_id %></code>
+                        </div>
+                        <p class="alert-msg"><%= a.error_message %></p>
+                        <span class="alert-meta">attempts: <%= a.attempts %> &middot; <%= a.created_at %></span>
+                    </li>
+                <% }) %>
+            </ul>
+            <a href="/admin/failed-logs" class="btn btn-link">View recovery log &rarr;</a>
+        <% } else { %>
+            <p>No critical alerts right now.</p>
+        <% } %>
+    </div>
+</div>

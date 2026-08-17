@@ -62,29 +62,41 @@
     }
   };
 
+  function skeletonRows(cols) {
+    let html = '';
+    for (let r = 0; r < 3; r++) {
+      html += '<tr class="skeleton-row">';
+      for (let c = 0; c < cols; c++) {
+        html += '<td><span class="skeleton-sheen"></span></td>';
+      }
+      html += '</tr>';
+    }
+    return html;
+  }
+
   function removeSkeletons(tbody) {
     tbody.querySelectorAll('tr.skeleton-row').forEach(function (row) {
       row.remove();
     });
   }
 
-  function initTable(table, options) {
-    options = options || {};
+  function initTable(table) {
     if (table.dataset.init === 'true') return;
-    if (table.hasAttribute('data-lazy') && !options.force) return;
-
     table.dataset.init = 'true';
 
     const tbody = table.querySelector('tbody[data-load-table]');
-    const scope = table.closest('[data-tab-pane], .card') || table.parentElement;
+    const scope = table.closest('.card') || table.parentElement;
     const button = scope ? scope.querySelector('button[data-load-more]') : null;
+    const searchInput = scope ? scope.querySelector('input[data-table-search]') : null;
     const endpoint = table.getAttribute('data-endpoint');
     const pageSize = parseInt(table.getAttribute('data-page-size') || '8', 10);
     const csrf = table.getAttribute('data-csrf') || '';
     const kind = table.getAttribute('data-table-kind');
     const render = renderers[kind] || renderers.users;
+    const cols = table.querySelectorAll('thead th').length || 1;
 
     let cursor = null;
+    let query = null;
     let loading = false;
 
     function showMessage(message, isError) {
@@ -112,6 +124,7 @@
       if (button) button.disabled = true;
 
       let url = endpoint + '?limit=' + pageSize;
+      if (query) url += '&q=' + encodeURIComponent(query);
       if (cursor) url += '&cursor=' + cursor;
 
       fetch(url, { headers: { 'Accept': 'application/json' } })
@@ -128,7 +141,7 @@
           removeSkeletons(tbody);
           const rows = payload.data || [];
           if (rows.length === 0 && !cursor) {
-            showMessage('No records to display.');
+            showMessage(query ? 'No records match "' + query + '".' : 'No records to display.');
           } else {
             appendRows(rows);
           }
@@ -152,64 +165,36 @@
         });
     }
 
+    function reloadWithSearch() {
+      query = searchInput.value.trim() || null;
+      cursor = null;
+      removeSkeletons(tbody);
+      tbody.innerHTML = skeletonRows(cols);
+      loadMore();
+    }
+
     if (button) {
       button.addEventListener('click', loadMore);
+    }
+
+    if (searchInput) {
+      let timer = null;
+      searchInput.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(reloadWithSearch, 300);
+      });
+      searchInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          clearTimeout(timer);
+          reloadWithSearch();
+        }
+      });
     }
 
     loadMore();
   }
 
-  function wireTabs() {
-    document.querySelectorAll('[data-tab-group]').forEach(function (group) {
-      const triggers = group.querySelectorAll('[data-tab-trigger]');
-      const panes = group.querySelector('[data-tab-panes]');
-
-      function closeAll() {
-        triggers.forEach(function (t) {
-          t.classList.remove('active');
-          t.setAttribute('aria-selected', 'false');
-        });
-        group.querySelectorAll('[data-tab-pane]').forEach(function (p) {
-          p.classList.remove('active');
-          p.setAttribute('aria-hidden', 'true');
-        });
-        if (panes) panes.classList.remove('has-open');
-      }
-
-      triggers.forEach(function (btn) {
-        btn.addEventListener('click', function () {
-          const target = btn.getAttribute('data-tab-trigger');
-
-          if (btn.classList.contains('active')) {
-            // clicking the active pill collapses the panel back to pills-only
-            closeAll();
-            return;
-          }
-
-          closeAll();
-          btn.classList.add('active');
-          btn.setAttribute('aria-selected', 'true');
-
-          const pane = group.querySelector('[data-tab-pane="' + target + '"]');
-          if (pane) {
-            pane.classList.add('active');
-            pane.setAttribute('aria-hidden', 'false');
-            const table = pane.querySelector('table[data-endpoint]');
-            if (table) initTable(table, { force: true });
-          }
-          if (panes) panes.classList.add('has-open');
-        });
-      });
-
-      // default state: collapsed (pills only, no panel)
-      closeAll();
-    });
-  }
-
-  // auto-init standalone pages (tables NOT wrapped in lazy tab panes)
-  document.querySelectorAll('table[data-endpoint]:not([data-lazy])').forEach(function (t) {
-    initTable(t, { force: true });
+  document.querySelectorAll('table[data-endpoint]').forEach(function (t) {
+    initTable(t);
   });
-
-  wireTabs();
 })();

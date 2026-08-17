@@ -7,15 +7,18 @@ const users = {
       .all();
   },
 
-  findPage({ limit = 8, beforeId = null } = {}) {
+  findPage({ limit = 8, beforeId = null, q = null } = {}) {
+    const columns = 'id, email, name, payment_intent_id, created_at';
+    const where = q ? ' WHERE (email LIKE ? OR name LIKE ?)' : '';
+    const search = q ? [`%${q}%`, `%${q}%`] : [];
     if (beforeId) {
       return db
-        .prepare('SELECT id, email, name, payment_intent_id, created_at FROM users WHERE id < ? ORDER BY id DESC LIMIT ?')
-        .all(beforeId, limit + 1);
+        .prepare(`SELECT ${columns} FROM users${where}${where ? ' AND' : ' WHERE'} id < ? ORDER BY id DESC LIMIT ?`)
+        .all(...search, beforeId, limit + 1);
     }
     return db
-      .prepare('SELECT id, email, name, payment_intent_id, created_at FROM users ORDER BY id DESC LIMIT ?')
-      .all(limit + 1);
+      .prepare(`SELECT ${columns} FROM users${where} ORDER BY id DESC LIMIT ?`)
+      .all(...search, limit + 1);
   },
 
   findById(id) {

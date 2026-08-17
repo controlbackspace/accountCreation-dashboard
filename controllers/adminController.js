@@ -40,12 +40,14 @@ function getDashboard(req, res) {
       reprovisioned: failedCreationLogs.countByStatus(LOG_STATUS.REPROVISIONED),
       refunded: failedCreationLogs.countByStatus(LOG_STATUS.REFUNDED)
     };
+    const recentAlerts = failedCreationLogs.findRecentFailures(5);
 
     res.render('templates/adminLayout', {
       title: 'Admin Dashboard - Account Provisioning',
       page: 'pages/dashboard.ejs',
       nav: 'dashboard',
       stats,
+      recentAlerts,
       query: req.query
     });
   } catch (error) {

@@ -7,15 +7,24 @@ const failedCreationLogs = {
       .all();
   },
 
-  findPage({ limit = 8, beforeId = null } = {}) {
+  findPage({ limit = 8, beforeId = null, q = null } = {}) {
+    const columns = 'id, payment_intent_id, raw_payload, error_message, status, attempts, created_at, updated_at';
+    const where = q ? ' WHERE (payment_intent_id LIKE ? OR error_message LIKE ? OR status LIKE ?)' : '';
+    const search = q ? [`%${q}%`, `%${q}%`, `%${q}%`] : [];
     if (beforeId) {
       return db
-        .prepare('SELECT id, payment_intent_id, raw_payload, error_message, status, attempts, created_at, updated_at FROM failed_creation_logs WHERE id < ? ORDER BY id DESC LIMIT ?')
-        .all(beforeId, limit + 1);
+        .prepare(`SELECT ${columns} FROM failed_creation_logs${where}${where ? ' AND' : ' WHERE'} id < ? ORDER BY id DESC LIMIT ?`)
+        .all(...search, beforeId, limit + 1);
     }
     return db
-      .prepare('SELECT id, payment_intent_id, raw_payload, error_message, status, attempts, created_at, updated_at FROM failed_creation_logs ORDER BY id DESC LIMIT ?')
-      .all(limit + 1);
+      .prepare(`SELECT ${columns} FROM failed_creation_logs${where} ORDER BY id DESC LIMIT ?`)
+      .all(...search, limit + 1);
+  },
+
+  findRecentFailures(limit = 5) {
+    return db
+      .prepare('SELECT id, payment_intent_id, error_message, status, attempts, created_at FROM failed_creation_logs WHERE status = ? ORDER BY id DESC LIMIT ?')
+      .all('FAILED', limit);
   },
 
   findById(id) {
