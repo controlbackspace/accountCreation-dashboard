@@ -1,17 +1,37 @@
 const users = require('../models/users');
 const failedCreationLogs = require('../models/failedCreationLogs');
+const statsCache = require('../models/statsCache');
 const { LOG_STATUS } = require('../utils/constants');
 
 function getLiveStats(req, res) {
+  const cached = statsCache.getStats();
+
+  if (cached) {
+    const stats = {
+      totalUsers: cached.total_users,
+      totalFailures: cached.total_failures,
+      reprovisioned: cached.reprovisioned,
+      refunded: cached.refunded,
+      timestamp: new Date(cached.updated_at).toLocaleTimeString()
+    };
+    return res.json({ success: true, stats, cached: true });
+  }
+
+  const totalUsers = users.countAll();
+  const totalFailures = failedCreationLogs.countByStatus(LOG_STATUS.FAILED);
+  const reprovisioned = failedCreationLogs.countByStatus(LOG_STATUS.REPROVISIONED);
+  const refunded = failedCreationLogs.countByStatus(LOG_STATUS.REFUNDED);
+
+  statsCache.upsertStats({ totalUsers, totalFailures, reprovisioned, refunded });
+
   const stats = {
-    totalUsers: users.countAll(),
-    totalFailures: failedCreationLogs.countByStatus(LOG_STATUS.FAILED),
-    reprovisioned: failedCreationLogs.countByStatus(LOG_STATUS.REPROVISIONED),
-    refunded: failedCreationLogs.countByStatus(LOG_STATUS.REFUNDED),
+    totalUsers,
+    totalFailures,
+    reprovisioned,
+    refunded,
     timestamp: new Date().toLocaleTimeString()
   };
-
-  res.json({ success: true, stats });
+  res.json({ success: true, stats, cached: false });
 }
 
 function parseLimit(raw) {

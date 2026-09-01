@@ -32,10 +32,13 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const webhookRoutes = require('./routes/webhook');
 const adminRoutes = require('./routes/admin');
+const { startTelemetryCron } = require('./jobs/cronRunner');
 
 // connect the routes here
 app.use('/webhook', webhookRoutes);
 app.use('/admin', adminRoutes);
+
+startTelemetryCron();
 
 // land people on the dashboard
 app.get('/', (req, res) => {

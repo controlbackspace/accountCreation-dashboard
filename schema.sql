@@ -46,3 +46,12 @@ CREATE TABLE IF NOT EXISTS email_logs (
     error_message TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS stats_cache (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    total_users INTEGER NOT NULL DEFAULT 0,
+    total_failures INTEGER NOT NULL DEFAULT 0,
+    reprovisioned INTEGER NOT NULL DEFAULT 0,
+    refunded INTEGER NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
