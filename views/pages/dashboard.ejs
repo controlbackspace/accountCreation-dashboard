@@ -1,8 +1,8 @@
 <div class="stats-grid">
-    <%- include('../molecules/statCard', { title: 'Active Provisioned Users', value: stats.totalUsers, color: '#333', link: '/admin/users' }) %>
-    <%- include('../molecules/statCard', { title: 'Active Failure Queue', value: stats.totalFailures, color: '#d81b60', link: '/admin/failed-logs' }) %>
-    <%- include('../molecules/statCard', { title: 'Re-provisioned via Retry', value: stats.reprovisioned, color: '#198754', link: '/admin/failed-logs' }) %>
-    <%- include('../molecules/statCard', { title: 'Marked Refunded', value: stats.refunded || 0, color: '#6c757d', link: '/admin/failed-logs' }) %>
+    <%- include('../molecules/statCard', { title: 'Active Provisioned Users', value: stats.totalUsers, color: '#333', link: '/admin/users', statKey: 'totalUsers' }) %>
+    <%- include('../molecules/statCard', { title: 'Active Failure Queue', value: stats.totalFailures, color: '#d81b60', link: '/admin/failed-logs', statKey: 'totalFailures' }) %>
+    <%- include('../molecules/statCard', { title: 'Re-provisioned via Retry', value: stats.reprovisioned, color: '#198754', link: '/admin/failed-logs', statKey: 'reprovisioned' }) %>
+    <%- include('../molecules/statCard', { title: 'Marked Refunded', value: stats.refunded || 0, color: '#6c757d', link: '/admin/failed-logs', statKey: 'refunded' }) %>
 </div>
 
 <div class="dashboard-alerts">
@@ -37,3 +37,9 @@
         <% } %>
     </div>
 </div>
+
+<div class="sync-indicator">
+    <small id="stats-last-updated">Auto-syncing every 5 minutes</small>
+</div>
+
+<script src="/js/statsPoller.js"></script>

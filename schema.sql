@@ -36,3 +36,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     sess JSON NOT NULL,
     expire TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS email_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    recipient_email TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    template_type TEXT NOT NULL,
+    status TEXT CHECK(status IN ('SENT', 'FAILED', 'PENDING')) DEFAULT 'PENDING',
+    error_message TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

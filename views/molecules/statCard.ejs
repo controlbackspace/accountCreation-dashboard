@@ -1,11 +1,11 @@
 <% if (link) { %>
 <a href="<%= link %>" class="stat-card stat-card--link">
     <h3><%= title %></h3>
-    <p style="color: <%= color || '#333' %>;"><%= value %></p>
+    <p style="color: <%= color || '#333' %>;" data-stat="<%= statKey || '' %>"><%= value %></p>
 </a>
 <% } else { %>
 <div class="stat-card">
     <h3><%= title %></h3>
-    <p style="color: <%= color || '#333' %>;"><%= value %></p>
+    <p style="color: <%= color || '#333' %>;" data-stat="<%= statKey || '' %>"><%= value %></p>
 </div>
 <% } %>

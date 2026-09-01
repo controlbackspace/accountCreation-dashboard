@@ -2,6 +2,7 @@ const db = require('../config/database');
 const bcrypt = require('bcrypt');
 const users = require('../models/users');
 const failedCreationLogs = require('../models/failedCreationLogs');
+const emailService = require('../services/emailService');
 const { loginAdmin, logoutAdmin } = require('../middleware/auth');
 const { DEFAULTS, LOG_STATUS } = require('../utils/constants');
 const { MAX_LENGTHS, cleanText, safeReturnTo, validateCustomerAttributes } = require('../utils/validation');
@@ -105,6 +106,12 @@ async function retryProvisioning(req, res) {
     });
 
     retryTransaction();
+
+    emailService.sendProvisioningCredentials({
+      email: userEmail,
+      name: userName,
+      tempPassword: temporaryPassword || DEFAULTS.TEMP_PASSWORD
+    });
 
     return res.redirect('/admin/dashboard?success=Account+successfully+re-provisioned');
 

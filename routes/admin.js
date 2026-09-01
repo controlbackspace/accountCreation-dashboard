@@ -16,7 +16,7 @@ const {
   handleLogin,
   handleLogout
 } = require('../controllers/adminController');
-const { listUsers, listFailedLogs } = require('../controllers/adminApiController');
+const { listUsers, listFailedLogs, getLiveStats } = require('../controllers/adminApiController');
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -44,5 +44,6 @@ router.post('/mark-refunded/:id', verifyCsrf, markRefunded);
 // JSON endpoints for lazy loading (GET-only, after the auth turnstile)
 router.get('/api/users', listUsers);
 router.get('/api/failed-logs', listFailedLogs);
+router.get('/api/stats', getLiveStats);
 
 module.exports = router;

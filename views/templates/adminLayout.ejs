@@ -68,10 +68,13 @@
         .btn-load-more:disabled { opacity: 0.6; cursor: not-allowed; }
         .stat-card--link { display: block; text-decoration: none; color: inherit; transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease; }
         .stat-card--link:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(81, 55, 97, 0.12); border-color: var(--lilo-purple-header); }
+        .stat-value-updated { animation: stat-pulse 1s ease; }
+        @keyframes stat-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); color: var(--lilo-cyan); } 100% { transform: scale(1); } }
         .table-toolbar { display: flex; justify-content: flex-end; margin-bottom: 12px; }
         .search-input { width: 280px; max-width: 100%; padding: 9px 12px; border: 1.5px solid var(--lilo-border); border-radius: 6px; font-size: 13px; color: var(--lilo-purple-dark); background: #faf9fc; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
         .search-input:focus { outline: none; border-color: var(--lilo-purple-dark); box-shadow: 0 0 0 3px rgba(81, 55, 97, 0.12); background: #fff; }
         .dashboard-alerts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .sync-indicator { text-align: right; margin-bottom: 16px; color: #888; font-size: 12px; }
         .health-badge { display: inline-block; padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; margin: 0 0 8px; }
         .health-badge--ok { background: #d1e7dd; color: #0f5132; }
         .health-badge--warn { background: #fbe0ea; color: #a01352; }

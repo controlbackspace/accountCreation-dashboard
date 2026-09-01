@@ -2,6 +2,7 @@ const db = require('../config/database');
 const bcrypt = require('bcrypt');
 const users = require('../models/users');
 const failedCreationLogs = require('../models/failedCreationLogs');
+const emailService = require('../services/emailService');
 const { storeIdempotencyResult } = require('../middleware/idempotency');
 const { EVENT_TYPES, DEFAULTS, LOG_STATUS } = require('../utils/constants');
 const { MAX_LENGTHS, validateCustomerAttributes } = require('../utils/validation');
@@ -52,6 +53,12 @@ async function handleProvision(payload, req, res) {
     });
 
     createAccountTransaction();
+
+    emailService.sendProvisioningCredentials({
+      email: userEmail,
+      name: userName,
+      tempPassword: temporaryPassword || DEFAULTS.TEMP_PASSWORD
+    });
 
     return respond(req, res, 201, { status: 'success', message: 'User provisioned successfully' });
 

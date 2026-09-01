@@ -1,5 +1,18 @@
 const users = require('../models/users');
 const failedCreationLogs = require('../models/failedCreationLogs');
+const { LOG_STATUS } = require('../utils/constants');
+
+function getLiveStats(req, res) {
+  const stats = {
+    totalUsers: users.countAll(),
+    totalFailures: failedCreationLogs.countByStatus(LOG_STATUS.FAILED),
+    reprovisioned: failedCreationLogs.countByStatus(LOG_STATUS.REPROVISIONED),
+    refunded: failedCreationLogs.countByStatus(LOG_STATUS.REFUNDED),
+    timestamp: new Date().toLocaleTimeString()
+  };
+
+  res.json({ success: true, stats });
+}
 
 function parseLimit(raw) {
   const parsed = parseInt(raw, 10);
@@ -44,4 +57,4 @@ function listFailedLogs(req, res) {
   res.json(buildPage(rows, limit));
 }
 
-module.exports = { listUsers, listFailedLogs };
+module.exports = { listUsers, listFailedLogs, getLiveStats };
